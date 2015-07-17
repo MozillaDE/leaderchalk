@@ -56,9 +56,6 @@ function createUser(userObj, private, save) {
     obj.bugzilla = {};
     obj.components = {};
     obj.level = userObj.level || 0;
-
-    // Count fixed
-    pending++;
     
     // with the current version of bz countBugs is not supported..
     bzClient.searchUsers(email, function(error, user) {
@@ -66,10 +63,10 @@ function createUser(userObj, private, save) {
         errorHandler(error);
         return;
       }
-      console.log(email);
-      console.log(user);
+      
+      pending++;
       bzClient.searchBugs({
-          assigned_to: email
+          assigned_to: email,
           status: ['RESOLVED', 'VERIFIED'],
           resolution: ['FIXED']
       }, function(error, fixed) {
@@ -77,34 +74,29 @@ function createUser(userObj, private, save) {
               errorHandler(error);
               return;
           }
-          console.log('finished.. ' + fixed.length);
+
           obj.bugzilla.fixed = fixed.length;
           pending--;
           maybeSave(obj, pending, save);
       });
-    });
-    
-    /**/
+      
+      pending++;  
+      bzClient.searchBugs({
+          assigned_to: email
+      }, function(error, assigned) {
+          if (error) {
+              errorHandler(error);
+              return;
+          }
 
-    // Count assigned
-    /*pending++;
-    
-    // with the current version of bz countBugs is not supported..
-    bzClient.searchBugs({
-        email1: email,
-        email1_assigned_to: 1
-    }, function(error, assigned) {
-        if (error) {
-            errorHandler(error);
-            return;
-        }
-        obj.bugzilla.assigned = assigned.length;
-        pending--;
-        maybeSave(obj, pending, save);
+          obj.bugzilla.assigned = assigned.length;
+          pending--;
+          maybeSave(obj, pending, save);
+      });
     });
 
     // Calculate Component
-    pending++;
+    /*pending++;
     bzClient.countComponents({
         x_axis_field: 'product',
         y_axis_field: 'component',
@@ -154,6 +146,7 @@ function saveFile() {
 
 
 function maybeSave(obj, pending, save) {
+    console.log(pending);
     if (pending == 0) {
         completedUsers++;
         console.log('Completed Bugzilla requests for', obj.name, '(' + completedUsers + '/' + totalUsers + ')');
