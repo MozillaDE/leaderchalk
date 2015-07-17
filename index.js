@@ -1,7 +1,8 @@
 var fs = require('fs'),
     bz = require('bz'),
     crypto = require('crypto'),
-    execSync = require('execSync'),
+    keys = require('./lib/keys.js'),
+    //execSync = require('execSync'),
     mozilliansAPI = require('./lib/mozillians.js');
 
 var GITHUB_USERNAME = '',
@@ -14,7 +15,11 @@ var emails = [],
 var totalUsers = 0,
     completedUsers = 0;
 
-var bzClient = bz.createClient();
+var bzClient = bz.createClient({
+  username: keys.bmoUsername,
+  password: keys.bmoPassword,
+  timeout: 30000
+});
 
 function createMD5(email) {
     return crypto.createHash('md5').update(email).digest('hex');
@@ -25,65 +30,67 @@ function errorHandler(e) {
 }
 
 function loadUsers(callback) {
-    fs.readFile('users.json', function(err, data) {
-        if(err)
-            errorHandler(err);
-        var userFile = eval(data.toString());
-        for (var i = 0; i < userFile.length; i++) {
-            createUser({ full_name: userFile[i][0],
-                         ircname: userFile[i][0],
-                         email: userFile[i][1],
-                         git: userFile[i][2],
-                         level: userFile[i][3] }, false, false);
-        }
-        mozilliansAPI.makeRequest(mozillians, processMozillians);
-    });
+    mozilliansAPI.makeRequest(mozillians, processMozillian);
 }
 
 function createUser(userObj, private, save) {
-    if(emails.indexOf(userObj.email) != -1)
+    var email = '';
+    var bmoAccount = userObj.external_accounts.find((acc) => acc.type === "bmo");
+    if (bmoAccount) {
+      email = bmoAccount.identifier;
+    }
+
+    if(emails.indexOf(email) != -1 || email == '') {
         return;
+    }
 
     totalUsers++;
     var obj = {};
-    var email = userObj.email;
     var pending = 0;
     if (private)
         obj.email = '';
     else
         obj.email = email;
     obj.gravatar = createMD5(email);
-    obj.name = userObj.ircname || userObj.full_name;
+    obj.name = userObj.ircname.value || userObj.full_name.value;
     obj.bugzilla = {};
     obj.components = {};
     obj.level = userObj.level || 0;
 
     // Count fixed
     pending++;
-    bzClient.countBugs({
-        'field0-0-0': 'attachment.is_patch',
-        'type0-0-0': 'equals',
-        'value0-0-0': 1,
-        'field0-1-0': 'flagtypes.name',
-        'type0-1-0': 'contains',
-        'value0-1-0': '+',
-        email1: email,
-        email1_assigned_to: 1,
-        status: ['RESOLVED', 'VERIFIED'],
-        resolution: ['FIXED']
-    }, function(error, fixed) {
-        if (error) {
-            errorHandler(error);
-            return;
-        }
-        obj.bugzilla.fixed = fixed;
-        pending--;
-        maybeSave(obj, pending, save);
+    
+    // with the current version of bz countBugs is not supported..
+    bzClient.searchUsers(email, function(error, user) {
+      if (error) {
+        errorHandler(error);
+        return;
+      }
+      console.log(email);
+      console.log(user);
+      bzClient.searchBugs({
+          assigned_to: email
+          status: ['RESOLVED', 'VERIFIED'],
+          resolution: ['FIXED']
+      }, function(error, fixed) {
+          if (error) {
+              errorHandler(error);
+              return;
+          }
+          console.log('finished.. ' + fixed.length);
+          obj.bugzilla.fixed = fixed.length;
+          pending--;
+          maybeSave(obj, pending, save);
+      });
     });
+    
+    /**/
 
     // Count assigned
-    pending++;
-    bzClient.countBugs({
+    /*pending++;
+    
+    // with the current version of bz countBugs is not supported..
+    bzClient.searchBugs({
         email1: email,
         email1_assigned_to: 1
     }, function(error, assigned) {
@@ -91,7 +98,7 @@ function createUser(userObj, private, save) {
             errorHandler(error);
             return;
         }
-        obj.bugzilla.assigned = assigned;
+        obj.bugzilla.assigned = assigned.length;
         pending--;
         maybeSave(obj, pending, save);
     });
@@ -128,16 +135,13 @@ function createUser(userObj, private, save) {
         }
         pending--;
         maybeSave(obj, pending, save);
-    });
+    });*/
 
     emails.push(email);
 }
 
-function processMozillians (data) {
-    // process mozillians
-    for(var i = 0; i < data.length; i++) {
-        createUser(data[i], true, true);
-    }
+function processMozillian(data) {
+    createUser(data, true, true);
 }
 
 function saveFile() {
@@ -165,7 +169,7 @@ function maybeSave(obj, pending, save) {
 // Bootstrap the app
 
 // Try to read github credentials from command line
-process.argv.forEach(function(val, index, array) {
+/*process.argv.forEach(function(val, index, array) {
     GITHUB_USERNAME = array[2]? array[2] : GITHUB_USERNAME;
     GITHUB_PASSWORD = array[3]? array[3]: GITHUB_PASSWORD;
 });
@@ -188,7 +192,7 @@ if (execResult.code != 0) {
     // Command failed
     console.log(execResult.stderr);
     process.exit(1);
-}
+}*/
 
 // Start already!
 loadUsers();
