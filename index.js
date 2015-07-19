@@ -162,7 +162,7 @@ function maybeSave(obj, pending, save) {
 // Bootstrap the app
 
 // Try to read github credentials from command line
-/*process.argv.forEach(function(val, index, array) {
+process.argv.forEach(function(val, index, array) {
     GITHUB_USERNAME = array[2]? array[2] : GITHUB_USERNAME;
     GITHUB_PASSWORD = array[3]? array[3]: GITHUB_PASSWORD;
 });
@@ -178,14 +178,6 @@ if (execResult.code != 0) {
     console.log(execResult.stderr);
     process.exit(1);
 }
-
-// copy our copy of bz.js
-var execResult = execSync.exec('cp bz.js node_modules/bz/');
-if (execResult.code != 0) {
-    // Command failed
-    console.log(execResult.stderr);
-    process.exit(1);
-}*/
 
 // Start already!
 loadUsers();
